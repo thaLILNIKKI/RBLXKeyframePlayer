@@ -1,17 +1,7 @@
--- KeyframePlayer Loadstring Bundle (ИСПРАВЛЕННАЯ ВЕРСИЯ ДЛЯ BONE'ов)
--- Copyright (c) 2024 RAMPAGE Interactive, all rights reserved.
--- Written by vq9o and Contributor(s), modified for Bone support
---
--- GitHub: https://github.com/RAMPAGELLC/RBLXKeyframePlayer
--- License: MIT
---
--- INSTALLATION:
--- loadstring(game:HttpGet("https://raw.githubusercontent.com/thaLILNIKKI/RBLXKeyframePlayer/main/loadstring-bundle.luau"))()
---
--- USAGE:
--- local KeyframePlayer = loadstring(game:HttpGet("https://raw.githubusercontent.com/thaLILNIKKI/RBLXKeyframePlayer/main/loadstring-bundle.luau"))()
--- local animation = KeyframePlayer:LoadAnimation(humanoid, keyframeSequence)
--- animation:Play()
+-- ============================================
+-- ИСПРАВЛЕННЫЙ KeyframePlayer ДЛЯ CREAM
+-- Ищет части рекурсивно по всему персонажу
+-- ============================================
 
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -49,7 +39,7 @@ end
 -- KeyframeSequenceAnimation Module
 -- ============================================
 
-local DebugEnabled = true
+local DebugEnabled = false
 
 local Animation = {}
 Animation.__index = Animation
@@ -67,9 +57,7 @@ function Animation.new(humanoid, keyframeSequence)
 
     self.IsPlaying = false
     self.Looped = false
-    pcall(function() 
-    self.Priority = keyframeSequence.Priority or 0 
-    end)
+    self.Priority = keyframeSequence.Priority or 0
     self.Speed = 1
     self.TimePosition = 0
     self.WeightCurrent = 1
@@ -82,7 +70,24 @@ function Animation.new(humanoid, keyframeSequence)
     self.StoppedSignal = GoodSignal.new()
     self.PausedSignal = GoodSignal.new()
 
+    -- 🔥 Кешируем все части персонажа для быстрого доступа
+    self.PartCache = {}
+    self:CacheParts()
+
     return self
+end
+
+-- 🔥 Кешируем все части рекурсивно
+function Animation:CacheParts()
+    local model = self.Humanoid.Parent
+    if not model then return end
+    
+    self.PartCache = {}
+    for _, part in ipairs(model:GetDescendants()) do
+        if part:IsA("BasePart") then
+            self.PartCache[part.Name] = part
+        end
+    end
 end
 
 function Animation:GetSequenceLength()
@@ -260,8 +265,28 @@ function Animation:Play(fadeTime, weight, speed)
 end
 
 -- ============================================
--- ИСПРАВЛЕННАЯ ФУНКЦИЯ ДЛЯ BONE'ов
+-- 🔥 ИСПРАВЛЕННЫЕ ФУНКЦИИ ДЛЯ CREAM
+-- Используют кеш частей вместо поиска по parent
 -- ============================================
+
+function Animation:FindPart(poseName)
+    -- Сначала ищем в кеше
+    local part = self.PartCache[poseName]
+    if part then return part end
+    
+    -- Если не нашли, ищем рекурсивно (на всякий случай)
+    local model = self.Humanoid.Parent
+    if not model then return nil end
+    
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") and descendant.Name == poseName then
+            self.PartCache[poseName] = descendant
+            return descendant
+        end
+    end
+    
+    return nil
+end
 
 function Animation:ApplyPose(humanoid, keyframe)
     if keyframe == nil or not keyframe:IsA("Keyframe") then
@@ -280,36 +305,39 @@ function Animation:ApplyPoseToPart(humanoid, pose)
         return
     end
 
-    local part = humanoid.Parent:FindFirstChild(pose.Name)
-    if not part or not part:IsA("BasePart") then
-        warn("Part not found: " .. tostring(pose.Name))
+    -- 🔥 Ищем часть по имени через кеш
+    local part = self:FindPart(pose.Name)
+    if not part then
+        _debug("Part not found: " .. tostring(pose.Name))
         return
     end
 
-    -- 🔥 ИСПРАВЛЕНИЕ: Ищем Bone внутри part
-    local bone = nil
+    -- Ищем Bone или Motor6D для этой части
+    local motorOrBone = nil
+    
+    -- Сначала ищем Bone внутри part
     for _, descendant in ipairs(part:GetDescendants()) do
         if descendant:IsA("Bone") then
-            bone = descendant
+            motorOrBone = descendant
             break
         end
     end
-
+    
     -- Если Bone не найден, ищем Motor6D
-    if not bone then
+    if not motorOrBone then
         for _, descendant in ipairs(humanoid.Parent:GetDescendants()) do
             if descendant:IsA("Motor6D") and descendant.Part1 == part then
-                bone = descendant
+                motorOrBone = descendant
                 break
             end
         end
     end
 
-    if bone then
-        bone.Transform = pose.CFrame
-        _debug("Applied pose to:", bone.Name, "for part:", part.Name)
+    if motorOrBone then
+        motorOrBone.Transform = pose.CFrame
+        _debug("Applied pose to:", motorOrBone.Name, "for part:", part.Name)
     else
-        warn("Bone or Motor6D not found for part: " .. part.Name)
+        _debug("Motor6D or Bone not found for part: " .. part.Name)
     end
 end
 
@@ -338,35 +366,36 @@ function Animation:ApplyInterpolatedPose(humanoid, currentKeyframe, nextKeyframe
 
         local nextPose = nextKeyframe:FindFirstChild(currentPose.Name)
         if nextPose and nextPose:IsA("Pose") then
-            local part = humanoid.Parent:FindFirstChild(currentPose.Name)
-            if part and part:IsA("BasePart") then
-                -- 🔥 ИСПРАВЛЕНИЕ: Ищем Bone внутри part
-                local bone = nil
+            -- 🔥 Ищем часть через кеш
+            local part = self:FindPart(currentPose.Name)
+            if part then
+                local motorOrBone = nil
+                
+                -- Ищем Bone внутри part
                 for _, descendant in ipairs(part:GetDescendants()) do
                     if descendant:IsA("Bone") then
-                        bone = descendant
+                        motorOrBone = descendant
                         break
                     end
                 end
-
-                if not bone then
+                
+                -- Если Bone не найден, ищем Motor6D
+                if not motorOrBone then
                     for _, descendant in ipairs(humanoid.Parent:GetDescendants()) do
                         if descendant:IsA("Motor6D") and descendant.Part1 == part then
-                            bone = descendant
+                            motorOrBone = descendant
                             break
                         end
                     end
                 end
 
-                if bone then
+                if motorOrBone then
                     local interpolatedCFrame = currentPose.CFrame:Lerp(nextPose.CFrame, alpha)
-                    bone.Transform = interpolatedCFrame
-                    _debug("Interpolated pose applied to:", bone.Name, "for part:", part.Name)
-                else
-                    warn("Bone or Motor6D not found for part: " .. part.Name)
+                    motorOrBone.Transform = interpolatedCFrame
+                    _debug("Interpolated pose applied to:", motorOrBone.Name, "for part:", part.Name)
                 end
             else
-                warn("Part not found or not a BasePart: " .. tostring(currentPose.Name))
+                _debug("Part not found: " .. tostring(currentPose.Name))
             end
         end
     end
