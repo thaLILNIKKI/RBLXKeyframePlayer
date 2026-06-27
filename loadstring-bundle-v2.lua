@@ -309,7 +309,7 @@ function Animation:ApplyPose(humanoid, keyframe)
 
 	for _, pose in ipairs(keyframe:GetChildren()) do
 		if pose:IsA("Pose") then
-			local part = humanoid.Parent:FindFirstChild(pose.Name)
+			local part = humanoid.Parent:FindFirstChild(pose.Name, true)
 
 			-- Skip the transformation on HumanoidRootPart itself but apply to its descendants
 			if part and part:IsA("BasePart") then
@@ -335,7 +335,7 @@ function Animation:ApplyPoseToPart(humanoid, pose)
 		return
 	end
 
-	local part = humanoid.Parent:FindFirstChild(pose.Name)
+	local part = humanoid.Parent:FindFirstChild(pose.Name, true)
 	if not part or not part:IsA("BasePart") then
 		warn("Part not found or not a BasePart: " .. tostring(pose.Name))
 		return
@@ -390,7 +390,7 @@ function Animation:ApplyInterpolatedPose(humanoid, currentKeyframe, nextKeyframe
 		local nextPose = nextKeyframe:FindFirstChild(currentPose.Name)
 
 		if nextPose and nextPose:IsA("Pose") then
-			local part = humanoid.Parent:FindFirstChild(currentPose.Name)
+			local part = humanoid.Parent:FindFirstChild(currentPose.Name, true)
 
 			if part and part:IsA("BasePart") then
 				local motorOrBone = nil
