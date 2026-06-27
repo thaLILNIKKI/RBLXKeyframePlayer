@@ -37,7 +37,7 @@ end
 -- KeyframeSequenceAnimation Module
 -- ============================================
 
-local DebugEnabled = false
+local DebugEnabled = true
 
 local Animation = {}
 Animation.__index = Animation
