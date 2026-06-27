@@ -67,7 +67,9 @@ function Animation.new(humanoid, keyframeSequence)
 
     self.IsPlaying = false
     self.Looped = false
-    self.Priority = keyframeSequence.Priority or 0
+    pcall(function() 
+    self.Priority = keyframeSequence.Priority or 0 
+    end)
     self.Speed = 1
     self.TimePosition = 0
     self.WeightCurrent = 1
